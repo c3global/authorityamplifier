@@ -96,8 +96,9 @@ function ProfileSetup({ onComplete }) {
 
 function MainApp({ profile, resetProfile }) {
   const [active, setActive] = useState(tools[0].id);
+  const [unlocked, setUnlocked] = useState(() => localStorage.getItem('aa_rewriter_unlocked') === 'yes');
   const tool = tools.find(t => t.id === active);
-  return <div className="shell"><aside className="sidebar"><div><p className="brandSmall">C3 Global</p><h2>Authority Amplifier™</h2><p className="mini">Private AI communication coaching</p><nav>{tools.map(t=><button key={t.id} onClick={()=>setActive(t.id)} className={active===t.id?'nav active':'nav'}>{t.label}</button>)}</nav></div><footer><p>{profile.firstName} · {profile.title}</p><button className="linkBtn" onClick={resetProfile}>Reset profile</button></footer></aside><ToolView key={tool.id} tool={tool} profile={profile} /></div>;
+  return <div className="shell"><aside className="sidebar"><div><p className="brandSmall">C3 Global</p><h2>Authority Amplifier™</h2><p className="mini">Private AI communication coaching</p><nav>{tools.map(t=><button key={t.id} onClick={()=>setActive(t.id)} className={active===t.id?'nav active':'nav'}>{t.label}</button>)}<p className="navDivider">Premium Add-On</p><button onClick={()=>setActive('rewriter')} className={active==='rewriter'?'nav active':'nav'}>Authority Rewriter™{unlocked ? '' : ' 🔒'}</button></nav></div><footer><p>{profile.firstName} · {profile.title}</p><button className="linkBtn" onClick={resetProfile}>Reset profile</button></footer></aside>{active === 'rewriter' ? <RewriterView profile={profile} unlocked={unlocked} onUnlock={()=>{ localStorage.setItem('aa_rewriter_unlocked','yes'); setUnlocked(true); }} /> : <ToolView key={tool.id} tool={tool} profile={profile} />}</div>;
 }
 
 function ToolView({ tool, profile }) {
@@ -117,6 +118,79 @@ function ToolView({ tool, profile }) {
     finally { setLoading(false); }
   }
   return <main className="content"><div className="top"><p className="eyebrow">Authority Tool</p><h1>{tool.label}</h1></div><section className="panel">{tool.render({ state, setState })}<div className="actions"><button className="primary" disabled={!tool.valid(state) || loading} onClick={generate}>{tool.cta}</button><button className="secondary" onClick={()=>{setState(tool.initial); setOutput(''); setError('');}}>Clear</button></div>{loading && <div className="loading"><span></span><span></span><span></span> Your coach is thinking...</div>}{error && <p className="error">{error}</p>}{output && <Output label={tool.outputLabel} text={output} />}</section></main>;
+}
+
+const docTypes = ['Email','Proposal','Presentation notes / slide talking points','Meeting comments / verbal statement','Performance review self-assessment','Executive summary','LinkedIn message or connection note'];
+const rewriteStyles = ['EXECUTIVE','DIPLOMATIC','DIRECT','PERSUASIVE','CULTURALLY INTELLIGENT','COACHING NOTE'];
+
+function RewriterView({ profile, unlocked, onUnlock }) {
+  if (!unlocked) return <UnlockGate onUnlock={onUnlock} />;
+  return <RewriterTool profile={profile} />;
+}
+
+function UnlockGate({ onUnlock }) {
+  const [code, setCode] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState('');
+  async function check() {
+    setChecking(true); setError('');
+    try {
+      const res = await fetch('/.netlify/functions/claude', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ action:'unlock', code }) });
+      const data = await res.json();
+      if (data.ok) onUnlock();
+      else setError('That code doesn’t match. Check your purchase email and try again.');
+    } catch { setError('Connection error. Please try again.'); }
+    finally { setChecking(false); }
+  }
+  return <main className="content"><div className="top"><p className="eyebrow">Premium Add-On</p><h1>Authority Rewriter™</h1></div><section className="panel">
+    <p className="lead">Paste one professional message and receive five authority-calibrated rewrites — Executive, Diplomatic, Direct, Persuasive, and the Culturally Intelligent version no generic AI offers. Enter the access code from your purchase email to unlock.</p>
+    <Field label="Access Code"><input value={code} onChange={e=>setCode(e.target.value)} placeholder="Enter your access code" /></Field>
+    <div className="actions"><button className="primary" disabled={!code.trim() || checking} onClick={check}>{checking ? 'Checking...' : 'Unlock the Rewriter'}</button></div>
+    {error && <p className="error">{error}</p>}
+  </section></main>;
+}
+
+function RewriterTool({ profile }) {
+  const [form, setForm] = useState({ docType: 'Email', content: '' });
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  async function generate() {
+    setLoading(true); setError(''); setOutput('');
+    const systemPrompt = `You are an elite executive communication coach and cultural intelligence expert with 20+ years of experience coaching multilingual professionals in global organizations.\n\nYour client is ${profile.firstName}, a ${profile.title} in the ${profile.industry} industry. Their native language is ${profile.nativeLanguage}.\n\nTask: Rewrite the user's professional communication in five distinct styles. Each version must be substantively different — not just slightly reworded. Each one should feel like it was written by a different strategic communicator with a specific goal in mind.\n\nFormat as:\n\n---\n**EXECUTIVE**\n[Purpose: Commands authority and signals senior-level thinking. Uses precise, confident language. No hedging. Structured for decision-makers who read fast.]\n[Rewritten version]\n\n---\n**DIPLOMATIC**\n[Purpose: Achieves the goal while preserving relationships and saving face. Warm but firm. Uses language that opens doors rather than closing them.]\n[Rewritten version]\n\n---\n**DIRECT**\n[Purpose: Gets to the point immediately. No preamble, no softening. Respects the reader's time. Best for confident internal communication.]\n[Rewritten version]\n\n---\n**PERSUASIVE**\n[Purpose: Moves the reader toward a decision or action. Uses evidence, logic, and subtle urgency. Frames the message around the reader's interests.]\n[Rewritten version]\n\n---\n**CULTURALLY INTELLIGENT**\n[Purpose: Written for a cross-cultural or international audience. Considers face-saving, relationship-first communication norms, avoids idioms or culture-specific references, and adapts assertiveness level for global readability. This is not a generic "professional" rewrite — it is specifically designed for high-context communication environments.]\n[Rewritten version]\n\nAfter all five versions, add:\n\n**COACHING NOTE:**\n[2–3 sentences on which version is recommended for the user's specific situation and why — and one phrase from the original that was the biggest authority leak]`;
+    const userPrompt = `Document type: ${form.docType}\n\nOriginal content:\n"${form.content}"\n\nPlease provide all five rewrites.`;
+    try {
+      const res = await fetch('/.netlify/functions/claude', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ systemPrompt, userPrompt, maxTokens: 4000 }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Connection error');
+      setOutput(data.text);
+    } catch { setError('Connection error. Please try again.'); }
+    finally { setLoading(false); }
+  }
+  return <main className="content"><div className="top"><p className="eyebrow">Premium Add-On</p><h1>Authority Rewriter™</h1></div><section className="panel">
+    <p className="lead">Paste one professional message. Receive five authority-calibrated rewrites with a culturally intelligent version built for global readability.</p>
+    <Field label="Document Type"><select value={form.docType} onChange={e=>setForm({...form,docType:e.target.value})}>{docTypes.map(x=><option key={x}>{x}</option>)}</select></Field>
+    <Field label="Original Content"><textarea className="tall" value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Paste the document or message here..." /></Field>
+    <div className="actions"><button className="primary" disabled={!form.content.trim() || loading} onClick={generate}>Rewrite for Authority</button><button className="secondary" onClick={()=>{setForm({docType:'Email',content:''}); setOutput(''); setError('');}}>Clear</button></div>
+    {loading && <div className="loading"><span></span><span></span><span></span> Your coach is thinking...</div>}{error && <p className="error">{error}</p>}{output && <RewriteOutput text={output} />}
+  </section></main>;
+}
+
+function RewriteOutput({ text }) {
+  const parts = parseSections(text);
+  if (!Object.keys(parts).length) return <Output label="YOUR REWRITES" text={text} />;
+  return <div>{rewriteStyles.map(name => parts[name] ? <Output key={name} label={name} text={parts[name]} /> : null)}</div>;
+}
+
+function parseSections(text) {
+  const result = {};
+  rewriteStyles.forEach((h, i) => {
+    const next = rewriteStyles.slice(i + 1).join('|');
+    const re = new RegExp(`\\*\\*${h}:?\\*\\*([\\s\\S]*?)(?=${next ? `\\*\\*(?:${next}):?\\*\\*|` : ''}$)`, 'i');
+    const m = text.match(re);
+    if (m) result[h] = m[1].replace(/\s*---\s*$/, '').replace(/^\s*---\s*/, '').trim();
+  });
+  return result;
 }
 
 function Field({ label, hint, children }) { return <label className="field"><span>{label}{hint && <em>{hint}</em>}</span>{children}</label>; }

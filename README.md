@@ -1,26 +1,27 @@
-# Authority Amplifier™ Build Package
+# Authority Amplifier™
 
-This package contains two standalone React + Netlify apps:
+A single hosted React + Netlify app containing both products:
 
-1. `authority-amplifier-toolkit` — the 6-tool core product
-2. `authority-rewriter` — the order bump rewrite tool
+1. **Authority Amplifier™ Toolkit** — the 6-tool core product (Confidence Translator, Meeting Prep Assistant, Recovery Coach, Mini-Frameworks, Elevator Pitch Builder, Authority Audit)
+2. **Authority Rewriter™** — the premium add-on (order bump), shown in the sidebar as a gated tier unlocked with an access code
 
-Both apps use a Netlify Function proxy at `/.netlify/functions/claude` so the Anthropic API key is never exposed in browser code.
+The app calls the Anthropic API through a Netlify Function proxy at `/.netlify/functions/claude`, so the API key is never exposed in browser code.
 
 ## Required Netlify environment variables
 
-Add these inside each Netlify site:
-
 ```bash
-ANTHROPIC_API_KEY=your_key_here
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
+ANTHROPIC_API_KEY=your_key_here          # required
+ANTHROPIC_MODEL=claude-sonnet-4-20250514 # optional — this is the default
+REWRITER_ACCESS_CODE=your_chosen_code    # optional — gates the Authority Rewriter™
 ```
 
-`ANTHROPIC_MODEL` is optional because the code defaults to `claude-sonnet-4-20250514`.
+### How the Rewriter gate works
+
+- If `REWRITER_ACCESS_CODE` is set, the Authority Rewriter™ appears locked (🔒) in the sidebar until the user enters that code. Deliver the code in the GHL purchase email for the order bump.
+- If `REWRITER_ACCESS_CODE` is **not** set, any code unlocks it (effectively open). Codes are compared case-insensitively.
+- Once unlocked, the unlock is remembered in the user's browser (`localStorage`).
 
 ## Local development
-
-From either app folder:
 
 ```bash
 npm install
@@ -31,12 +32,7 @@ Netlify Dev will serve the Vite app and the Function together. `npm run dev` req
 
 ## Deployment
 
-Recommended setup:
-
-- Deploy `authority-amplifier-toolkit` to `amplifier.c3global.co` or `app.c3global.co`
-- Deploy `authority-rewriter` to `rewriter.c3global.co`
-
-For each Netlify project:
+Deploy to Netlify at `app.c3global.co` or `amplifier.c3global.co`:
 
 - Build command: `npm run build`
 - Publish directory: `dist`
@@ -44,7 +40,7 @@ For each Netlify project:
 
 ## Notes
 
-- Profile data for Authority Amplifier™ is stored in `localStorage`.
-- No login, no database, no ChatGPT account required.
+- User profile is stored in `localStorage`. No login, no database, no ChatGPT account required.
+- Every tool personalizes its system prompt with the user's name, role, industry, native language, and communication challenge.
 - Each tool has loading, error, clear, output, and copy-to-clipboard states.
-- The API key is server-side only inside Netlify Functions.
+- The Rewriter returns five style panels (Executive, Diplomatic, Direct, Persuasive, Culturally Intelligent) plus a Coaching Note, each with its own copy button.

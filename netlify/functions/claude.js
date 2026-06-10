@@ -4,10 +4,18 @@ export default async (request) => {
   }
 
   try {
+    const body = await request.json();
+
+    if (body.action === 'unlock') {
+      const expected = (process.env.REWRITER_ACCESS_CODE || '').trim();
+      const ok = !expected || (body.code || '').trim().toLowerCase() === expected.toLowerCase();
+      return json({ ok });
+    }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return json({ error: 'Missing ANTHROPIC_API_KEY' }, 500);
 
-    const { systemPrompt, userPrompt } = await request.json();
+    const { systemPrompt, userPrompt, maxTokens } = body;
     if (!systemPrompt || !userPrompt) return json({ error: 'Missing prompt data' }, 400);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -19,7 +27,7 @@ export default async (request) => {
       },
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-        max_tokens: 1800,
+        max_tokens: Math.min(Math.max(Number(maxTokens) || 1800, 256), 4096),
         temperature: 0.4,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }]
