@@ -15,8 +15,11 @@ export default async (request) => {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return json({ error: 'Missing ANTHROPIC_API_KEY' }, 500);
 
-    const { systemPrompt, userPrompt, maxTokens } = body;
-    if (!systemPrompt || !userPrompt) return json({ error: 'Missing prompt data' }, 400);
+    const { systemPrompt, userPrompt, messages, maxTokens } = body;
+    const history = Array.isArray(messages) && messages.length
+      ? messages.filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      : userPrompt ? [{ role: 'user', content: userPrompt }] : [];
+    if (!systemPrompt || !history.length) return json({ error: 'Missing prompt data' }, 400);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -30,7 +33,7 @@ export default async (request) => {
         max_tokens: Math.min(Math.max(Number(maxTokens) || 1800, 256), 4096),
         temperature: 0.4,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }]
+        messages: history
       })
     });
 
